@@ -3,7 +3,9 @@ import mongoose from 'mongoose';
 const conversationSchema = new mongoose.Schema(
   {
     buyerName: { type: String, required: true },
-    buyerHandle: { type: String, required: true, index: true },
+    // One conversation per buyer handle. Unique so two concurrent inbound
+    // messages from the same buyer can't race into two separate threads.
+    buyerHandle: { type: String, required: true, unique: true, index: true },
     status: { type: String, enum: ['cold', 'warm', 'hot'], default: 'cold' },
     item: { type: String, default: null },
     statusReason: { type: String, default: null },

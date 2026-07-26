@@ -1,8 +1,17 @@
-// All API access goes through the Vite proxy at /api, so the client never sees
-// the Anthropic key and there is no base URL to configure.
+// In local dev VITE_API_URL is unset, so requests go to /api and the Vite proxy
+// forwards them to :4000 — same origin, nothing to configure.
+//
+// In production the backend is a separate Vercel project on its own domain, so
+// VITE_API_URL must be set to that origin at BUILD time (Vite inlines env vars
+// into the bundle; changing it requires a redeploy, not just a restart).
+//
+// Either way the Anthropic key stays server-side — only this base URL is public.
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+export const apiBase = API_BASE;
 
 async function request(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE}/api${path}`, {
     headers: { 'content-type': 'application/json' },
     ...options,
   });

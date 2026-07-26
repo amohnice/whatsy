@@ -1,6 +1,7 @@
 // Single data-access interface with two backends: MongoDB (mongoose) when
 // MONGODB_URI is reachable, otherwise an in-memory store so the app still runs
 // fully offline. Routes only ever talk to `store` — they never know which.
+import './dns-bootstrap.js'; // must run before any mongodb+srv:// lookup
 import mongoose from 'mongoose';
 import { randomUUID } from 'node:crypto';
 import { CATALOG_SEED } from './seed/catalog.js';
@@ -160,12 +161,19 @@ const shapeItem = (d) =>
 
 const mongoStore = {
   async seedCatalog() {
-    if ((await CatalogItem.countDocuments()) > 0) return;
-    await CatalogItem.insertMany(CATALOG_SEED);
+    // Upsert by name rather than count-then-insert: several serverless instances
+    // can cold-start at once, and the check-then-write version would let two of
+    // them both see an empty collection and insert the catalog twice.
+    await CatalogItem.bulkWrite(
+      CATALOG_SEED.map((item) => ({
+        updateOne: { filter: { name: item.name }, update: { $setOnInsert: item }, upsert: true },
+      })),
+      { ordered: false },
+    );
   },
 
   async listCatalog() {
-    return (await CatalogItem.find().lean({ virtuals: false })).map((d) => shapeItem(d));
+    return (await CatalogItem.find().lean()).map((d) => shapeItem(d));
   },
 
   async listConversations() {
@@ -182,12 +190,30 @@ const mongoStore = {
   },
 
   async createConversation({ buyerName, buyerHandle, item = null }) {
-    return shapeConversation(await Conversation.create({ buyerName, buyerHandle, item }));
+    try {
+      return shapeConversation(await Conversation.create({ buyerName, buyerHandle, item }));
+    } catch (err) {
+      // Lost the race against a concurrent message from the same buyer — the
+      // other request already created the thread, so use theirs.
+      if (err?.code === 11000) {
+        return shapeConversation(await Conversation.findOne({ buyerHandle }));
+      }
+      throw err;
+    }
   },
 
   async updateConversation(id, patch) {
     if (!mongoose.isValidObjectId(id)) return null;
-    return shapeConversation(await Conversation.findByIdAndUpdate(id, patch, { new: true }));
+    // updatedAt is set explicitly: callers pass an empty patch purely to bump the
+    // conversation to the top of the list (e.g. after a payment link), and
+    // mongoose's automatic timestamp does not fire for a no-op update.
+    return shapeConversation(
+      await Conversation.findByIdAndUpdate(
+        id,
+        { ...patch, updatedAt: new Date() },
+        { new: true, timestamps: false },
+      ),
+    );
   },
 
   async listMessages(conversationId) {
@@ -223,22 +249,82 @@ const mongoStore = {
 
 let active = memoryStore;
 
-export async function initStore() {
+// Memoised: the local entrypoint awaits this at boot and the serverless
+// middleware awaits it per request, so it must be safe to call repeatedly.
+let initPromise = null;
+
+export function initStore() {
+  if (!initPromise) {
+    initPromise = doInit().catch((err) => {
+      initPromise = null; // allow a retry on the next request
+      throw err;
+    });
+  }
+  return initPromise;
+}
+
+// Serverless connection reuse. Each warm invocation re-enters this module, and
+// dialing a new Atlas connection per request would exhaust the M0 connection cap
+// and add ~1s of TLS handshake to every call. Cached on globalThis so the
+// connection survives module re-evaluation within an instance.
+const globalCache = globalThis.__whatsyMongoose ?? (globalThis.__whatsyMongoose = { conn: null });
+
+async function connectMongo(uri) {
+  if (globalCache.conn) return globalCache.conn;
+  globalCache.conn = mongoose
+    .connect(uri, {
+      // Atlas M0 can take several seconds to answer a cold connection — the old
+      // 2.5s timeout was tuned for a local mongod and would spuriously fail.
+      serverSelectionTimeoutMS: 10000,
+      // Fail fast instead of silently queueing operations behind a dead socket.
+      bufferCommands: false,
+      maxPoolSize: 5, // serverless: many instances × small pool
+    })
+    .catch((err) => {
+      globalCache.conn = null; // don't cache a failure
+      throw err;
+    });
+  return globalCache.conn;
+}
+
+async function doInit() {
   const uri = process.env.MONGODB_URI;
-  if (uri) {
+
+  if (!uri) {
+    // No database configured. Fine locally; on Vercel this means an inbox that
+    // empties on every cold start, so say so loudly.
+    if (process.env.VERCEL) {
+      console.warn(
+        '[store] MONGODB_URI is not set on Vercel — using the in-memory store. ' +
+          'Conversations WILL be lost on cold starts and split across instances.',
+      );
+    } else {
+      console.log('[store] no MONGODB_URI set — using in-memory store');
+    }
+  } else {
     try {
-      await mongoose.connect(uri, { serverSelectionTimeoutMS: 2500 });
+      await connectMongo(uri);
       active = mongoStore;
       backend = 'mongodb';
       console.log('[store] connected to MongoDB');
     } catch (err) {
+      // Falling back silently is right for local dev, but on a deployment it
+      // would hide a misconfigured URI behind an inbox that looks merely buggy.
+      // Fail loudly there instead — unless explicitly overridden.
+      if (process.env.VERCEL && process.env.ALLOW_MEMORY_FALLBACK !== '1') {
+        console.error(`[store] MongoDB connection failed: ${err.message}`);
+        throw new Error(
+          `MONGODB_URI is set but unreachable: ${err.message}. ` +
+            'Check the password is URL-encoded and that Network Access allows 0.0.0.0/0. ' +
+            'Set ALLOW_MEMORY_FALLBACK=1 to run without persistence instead.',
+        );
+      }
       console.warn(`[store] MongoDB unavailable (${err.message}) — using in-memory store`);
       active = memoryStore;
       backend = 'memory';
     }
-  } else {
-    console.log('[store] no MONGODB_URI set — using in-memory store');
   }
+
   await active.seedCatalog();
   return active;
 }

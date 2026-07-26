@@ -753,3 +753,36 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* --------------------------------------------------- ephemeral-store warning */
+
+.chip.is-warn {
+  color: var(--warm);
+  border-color: #e6cf8a;
+  background: var(--warm-bg);
+}
+
+.warn-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--warm-bg);
+  border-bottom: 1px solid #e6cf8a;
+  color: #7a5d00;
+  padding: 8px 18px;
+  font-size: 12.5px;
+  flex: none;
+}
+
+.warn-bar code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: #fff;
+  border: 1px solid #e6cf8a;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.warn-bar .btn {
+  margin-left: auto;
+}

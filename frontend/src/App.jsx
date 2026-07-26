@@ -31,8 +31,31 @@ export default function App() {
   const activeIdRef = useRef(null);
   activeIdRef.current = activeId;
 
+  // On serverless the backend can be swapped for a fresh instance at any time,
+  // and with the in-memory store that means the inbox silently empties. Watching
+  // instanceId lets us say so out loud instead of looking broken.
+  const lastInstance = useRef(null);
+  const [instanceChanged, setInstanceChanged] = useState(false);
+
   const refresh = useCallback(async () => {
     try {
+      getHealth()
+        .then((h) => {
+          setHealth(h);
+          // Only a concern when the store is ephemeral — with MongoDB a new
+          // instance keeps its data, so warning about it would be a false alarm.
+          if (
+            h.ephemeral &&
+            lastInstance.current &&
+            h.instanceId &&
+            h.instanceId !== lastInstance.current
+          ) {
+            setInstanceChanged(true);
+          }
+          if (h.instanceId) lastInstance.current = h.instanceId;
+        })
+        .catch(() => {});
+
       const list = await getConversations();
       setConversations(list);
       const id = activeIdRef.current;
@@ -62,10 +85,6 @@ export default function App() {
     simulation.resetDrip(); // let the drip re-run so the demo is repeatable
     refresh();
   }, [refresh, simulation]);
-
-  useEffect(() => {
-    getHealth().then(setHealth).catch(() => setHealth(null));
-  }, []);
 
   useEffect(() => {
     refresh();
@@ -177,7 +196,22 @@ export default function App() {
           )}
           {health && (
             <>
-              <span className="chip">store: {health.store}</span>
+              <span
+                className={`chip${health.ephemeral ? ' is-warn' : ''}`}
+                title={
+                  health.ephemeral
+                    ? 'In-memory store — conversations are lost whenever the backend restarts or a new instance serves the request. Set MONGODB_URI to persist.'
+                    : 'MongoDB-backed'
+                }
+              >
+                store: {health.store}
+                {health.ephemeral ? ' (ephemeral)' : ''}
+              </span>
+              {health.instanceId && (
+                <span className="chip" title={`Backend booted ${health.bootedAt}`}>
+                  #{health.instanceId}
+                </span>
+              )}
               <span className={`chip${health.claude === 'configured' ? '' : ' is-bad'}`}>
                 {health.model}
               </span>
@@ -201,6 +235,18 @@ export default function App() {
         onOneMore={simulation.sendOneMore}
         onReset={handleReset}
       />
+
+      {instanceChanged && (
+        <div className="warn-bar">
+          <span>
+            The backend was replaced by a new serverless instance, so the in-memory inbox may have
+            reset. This is expected without a database — set <code>MONGODB_URI</code> to persist.
+          </span>
+          <button className="btn btn-small btn-quiet" onClick={() => setInstanceChanged(false)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {(error || simulation.simError) && (
         <div className="error-bar">Backend error: {error || simulation.simError}</div>
