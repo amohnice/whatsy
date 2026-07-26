@@ -880,3 +880,30 @@ button {
 .composer-row .btn-primary {
   padding: 10px 18px;
 }
+
+/* ------------------------------------------------- auto-reply toggle */
+
+.btn-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.btn-toggle.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+  flex: none;
+}
+
+.dot.is-on {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 122, 95, 0.18);
+}

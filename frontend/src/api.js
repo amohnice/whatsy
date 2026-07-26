@@ -54,5 +54,9 @@ export const createPaymentLink = (conversationId) =>
 export const getFunnel = ({ refresh = false } = {}) =>
   request(`/funnel/summary${refresh ? '?refresh=1' : ''}`);
 
+// SIMULATION ONLY: asks the backend to role-play this buyer's next DM.
+export const simulateBuyerReply = (conversationId) =>
+  request(`/conversations/${conversationId}/simulate-reply`, { method: 'POST' });
+
 export const getSimulationMessages = () => request('/simulation/messages');
 export const resetInbox = () => request('/dev/reset', { method: 'POST' });

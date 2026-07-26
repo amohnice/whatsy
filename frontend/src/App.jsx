@@ -76,6 +76,7 @@ export default function App() {
   const simulation = useSimulation({
     ready: loaded,
     inboxEmpty: loaded && conversations.length === 0,
+    conversations,
     onActivity: refresh,
   });
 
@@ -245,6 +246,8 @@ export default function App() {
       <SimulationControls
         inFlight={simulation.inFlight}
         rushRunning={simulation.rushRunning}
+        autoReply={simulation.autoReply}
+        onToggleAutoReply={() => simulation.setAutoReply((v) => !v)}
         onRush={simulation.runRush}
         onOneMore={simulation.sendOneMore}
         onReset={handleReset}

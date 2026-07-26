@@ -213,6 +213,56 @@ Write the one-line brief.`;
 }
 
 // ---------------------------------------------------------------------------
+// Claude call #5 — role-play the BUYER's next DM (simulation only)
+//
+// This is the stand-in for a real person on the other end of Instagram. It
+// exists purely so threads keep moving in the demo; nothing about it touches a
+// real messaging platform.
+// ---------------------------------------------------------------------------
+
+const BUYER_SCHEMA = {
+  type: 'object',
+  properties: {
+    reply: {
+      type: ['string', 'null'],
+      description:
+        "The buyer's next DM, in their own voice. Null if they would realistically just stop replying.",
+    },
+    endsConversation: {
+      type: 'boolean',
+      description:
+        'True if this is their last message (they bought, they declined, or they have drifted off).',
+    },
+  },
+  required: ['reply', 'endsConversation'],
+  additionalProperties: false,
+};
+
+export async function simulateBuyerReply({ catalog, messages, buyerName, status }) {
+  const system = `You are role-playing a customer messaging a watch shop in Nairobi on Instagram. You are NOT the shop. You are ${buyerName}, a real person deciding whether to buy.
+
+Write ${buyerName}'s next DM. Rules:
+- Stay in the exact voice established earlier in the thread: same language mix (Sheng / Swahili-English / English), same level of typos, same energy. If they typed in lowercase with no punctuation, keep doing that. If they SHOUTED, keep shouting.
+- Keep it SHORT. Real DMs are one line, sometimes three words. Never write a paragraph.
+- Move the conversation somewhere. React to what the shop just said — agree, push back, haggle, ask one more thing, go quiet, or commit.
+- Behave like a real buyer, not a cooperative test script: haggling ("last price?"), hesitating, asking about delivery or warranty, going cold, or ghosting are all realistic.
+- Current read on this buyer's intent is "${status}". Let them drift naturally from there — a cold browser usually fades out, a hot buyer pushes to pay. Do not force a sale.
+- If the shop already answered everything and the buyer would realistically stop replying, set endsConversation true and reply null.
+- Never write the shop's side. Never mention being an AI or a simulation.
+
+Shop's catalog, for realism about what they might ask for (buyers can also ask for things the shop doesn't stock):
+${renderCatalog(catalog)}`;
+
+  const user = `The thread so far (oldest first). You are ${buyerName}:
+
+${renderThread(messages, buyerName)}
+
+Write ${buyerName}'s next DM, or end the conversation.`;
+
+  return jsonCall({ system, user, schema: BUYER_SCHEMA, maxTokens: 400 });
+}
+
+// ---------------------------------------------------------------------------
 // Claude call #4 — plain-language funnel insight for the dashboard
 // ---------------------------------------------------------------------------
 

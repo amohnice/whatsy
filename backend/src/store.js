@@ -57,6 +57,7 @@ const memoryStore = {
       hotSummary: null,
       everWarm: false,
       everHot: false,
+      simDone: false,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -134,6 +135,7 @@ const shapeConversation = (d) =>
     hotSummary: d.hotSummary,
     everWarm: d.everWarm,
     everHot: d.everHot,
+    simDone: d.simDone,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   };

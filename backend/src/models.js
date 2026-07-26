@@ -12,6 +12,9 @@ const conversationSchema = new mongoose.Schema(
     hotSummary: { type: String, default: null },
     everWarm: { type: Boolean, default: false },
     everHot: { type: Boolean, default: false },
+    // Simulation only: the role-played buyer has stopped replying, so the
+    // auto-reply engine should leave this thread alone.
+    simDone: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

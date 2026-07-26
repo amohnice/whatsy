@@ -58,6 +58,28 @@ Each inbound message triggers up to three real Claude calls:
 A fourth call generates the dashboard's weekly funnel insight (cached against
 the counts it describes, so polling doesn't bill a call per poll).
 
+### Buyer auto-replies
+
+A fifth call role-plays the **buyer**, so threads keep moving instead of ending
+after one message. The frontend runs an engine (toggleable in the control bar,
+on by default) that every 4s picks up to 2 eligible threads and asks the backend
+for that buyer's next DM, which then goes through the normal inbound pipeline.
+
+A thread is eligible only when the shop replied last, no draft is pending, the
+buyer hasn't been marked `simDone`, and they are under `MAX_BUYER_TURNS`
+(default 4, env-configurable). The server re-checks all of this and owns the
+`simDone` flag — the client's check is only there to avoid pointless requests.
+
+Two consequences worth knowing:
+
+- **A pending draft pauses the thread.** The simulated buyer waits, exactly as a
+  real one would, and resumes once James sends. Threads therefore pile up
+  waiting on approval, which is the intended demo story but does mean the engine
+  goes quiet until you act.
+- **Cost.** Each buyer turn is three Claude calls (buyer + reply + classify),
+  plus a fourth when a thread first turns hot. A 90s unattended run over 11
+  threads fired 16 turns. Switch the toggle off when you aren't demoing.
+
 ### Grounding
 
 Prompts are grounded, not trusted. The seed catalog is rendered verbatim into
@@ -76,6 +98,7 @@ a real alternative, not a hallucinated price.
 | `GET` | `/api/conversations/:id` | conversation + messages |
 | `POST` | `/api/messages/inbound` | `{conversationId \| buyerHandle, text}` — runs the pipeline |
 | `POST` | `/api/conversations/:id/reply` | James's own reply (`sender: 'james'`) — no Claude call |
+| `POST` | `/api/conversations/:id/simulate-reply` | **Simulation only** — role-plays the buyer's next DM, then runs it through the inbound pipeline |
 | `PATCH` | `/api/conversations/:id/send-draft` | edit draft text, stays a draft |
 | `POST` | `/api/conversations/:id/send-draft` | approve + send (optional `text` to edit-and-send) |
 | `POST` | `/api/conversations/:id/payment-link` | **mock** link, posted into the thread |

@@ -3,7 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { initStore, store, getBackend } from './store.js';
-import { claudeConfigured } from './claude.js';
+import { claudeConfigured, simulateBuyerReply } from './claude.js';
 import { handleInbound } from './pipeline.js';
 import { INBOUND_SEED } from './seed/inbound.js';
 import { computeFunnel, getFunnelInsight, clearInsightCache } from './funnel.js';
@@ -85,6 +85,10 @@ app.get('/api/conversations', async (_req, res) => {
         ...c,
         messageCount: messages.length,
         lastMessage: last ? `${last.sender === 'buyer' ? '' : '↩ '}${last.text}` : null,
+        lastSender: last?.sender ?? null,
+        // Lets the auto-reply engine judge eligibility from the list alone,
+        // instead of fetching every thread on every tick.
+        buyerTurns: messages.filter((m) => m.sender === 'buyer').length,
         hasPendingDraft: messages.some((m) => m.isDraft),
       };
     }),
@@ -243,6 +247,69 @@ app.get('/api/funnel/summary', async (req, res, next) => {
       }
     }
     res.json({ ...funnel, insight, insightError });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// How many messages one simulated buyer will ever send. Each turn costs three
+// Claude calls (buyer + reply + classify), so this is the main cost ceiling on
+// the auto-reply engine.
+const MAX_BUYER_TURNS = Number(process.env.MAX_BUYER_TURNS || 4);
+
+// SIMULATION ONLY: role-play the buyer's next DM and run it through the real
+// inbound pipeline. This is what keeps threads moving after the first message —
+// it is not connected to any messaging platform.
+app.post('/api/conversations/:id/simulate-reply', async (req, res, next) => {
+  try {
+    const conversation = await store.getConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ error: 'conversation not found' });
+    if (!claudeConfigured()) {
+      return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not set' });
+    }
+
+    const messages = await store.listMessages(conversation.id);
+    const buyerTurns = messages.filter((m) => m.sender === 'buyer').length;
+    const last = messages[messages.length - 1];
+
+    // Guards, in the order a real conversation would hit them.
+    if (conversation.simDone) {
+      return res.json({ skipped: 'buyer has stopped replying', conversation });
+    }
+    if (messages.some((m) => m.isDraft)) {
+      // The shop hasn't actually replied yet — James is sitting on a draft. A
+      // real buyer is waiting, so the thread should pause here.
+      return res.json({ skipped: 'awaiting draft approval', conversation });
+    }
+    if (!last || last.sender === 'buyer') {
+      return res.json({ skipped: 'nothing to reply to', conversation });
+    }
+    if (buyerTurns >= MAX_BUYER_TURNS) {
+      await store.updateConversation(conversation.id, { simDone: true });
+      return res.json({ skipped: 'turn limit reached', conversation });
+    }
+
+    const catalog = await store.listCatalog();
+    const { reply, endsConversation } = await simulateBuyerReply({
+      catalog,
+      messages,
+      buyerName: conversation.buyerName,
+      status: conversation.status,
+    });
+
+    if (!reply || !reply.trim()) {
+      const updated = await store.updateConversation(conversation.id, { simDone: true });
+      return res.json({ skipped: 'buyer went quiet', conversation: updated });
+    }
+
+    // Feed it through the same endpoint logic real inbound messages use, so the
+    // reply, reclassification and hot-summary all run normally.
+    const result = await handleInbound({ conversationId: conversation.id, text: reply.trim() });
+
+    if (endsConversation) {
+      result.conversation = await store.updateConversation(conversation.id, { simDone: true });
+    }
+    res.status(201).json({ ...result, endsConversation });
   } catch (err) {
     next(err);
   }
