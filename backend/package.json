@@ -1,0 +1,20 @@
+{
+  "name": "whatsy-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WHATSY — AI-assisted sales inbox (simulated). Express + Mongo/in-memory + Claude.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.0.0",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5"
+  }
+}
