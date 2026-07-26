@@ -5,10 +5,12 @@ const DRIP_GAP_MS = 2600; // slow trickle so the inbox is never empty or static
 const RUSH_MIN_MS = 300; // spec'd burst window
 const RUSH_MAX_MS = 500;
 
-// Auto-reply engine. Each buyer turn costs three Claude calls, so it is paced
-// and capped rather than replying to everything the instant it can.
-const AUTO_TICK_MS = 4000;
-const AUTO_MAX_CONCURRENT = 2;
+// Auto-reply engine. A single buyer turn is two sequential Claude round-trips
+// (generate the buyer's DM, then run the inbound pipeline), so ~5-9s per turn is
+// a floor we cannot tune away. Throughput comes from noticing eligible threads
+// quickly and running several at once.
+const AUTO_TICK_MS = 1200;
+const AUTO_MAX_CONCURRENT = 5;
 const AUTO_MAX_BUYER_TURNS = 4; // mirrors MAX_BUYER_TURNS on the server
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -33,6 +35,9 @@ export function useSimulation({ ready, inboxEmpty, conversations, onActivity }) 
   const hasDripped = useRef(false);
   const extraCursor = useRef(0);
   const autoInFlight = useRef(new Set());
+  // Running several turns at once can trip Anthropic rate limits; back off for a
+  // few seconds rather than hammering through the 429s.
+  const cooldownUntil = useRef(0);
 
   // Read the latest list inside the interval without restarting it on every poll.
   const convRef = useRef([]);
@@ -114,6 +119,7 @@ export function useSimulation({ ready, inboxEmpty, conversations, onActivity }) 
     const tick = async () => {
       // Stay out of the way of the rush so the two don't stampede together.
       if (rushRunning) return;
+      if (Date.now() < cooldownUntil.current) return;
 
       const eligible = convRef.current.filter(
         (c) =>
@@ -137,7 +143,12 @@ export function useSimulation({ ready, inboxEmpty, conversations, onActivity }) 
         setInFlight((n) => n + 1);
         simulateBuyerReply(c.id)
           .then(() => onActivity?.())
-          .catch((err) => setSimError(err.message))
+          .catch((err) => {
+            if (/rate.?limit|429|overloaded/i.test(err.message)) {
+              cooldownUntil.current = Date.now() + 8000;
+            }
+            setSimError(err.message);
+          })
           .finally(() => {
             autoInFlight.current.delete(c.id);
             setInFlight((n) => n - 1);
@@ -145,6 +156,7 @@ export function useSimulation({ ready, inboxEmpty, conversations, onActivity }) 
       }
     };
 
+    tick(); // don't wait a full interval before the first turn
     const timer = setInterval(tick, AUTO_TICK_MS);
     return () => clearInterval(timer);
   }, [autoReply, rushRunning, onActivity]);
