@@ -13,6 +13,8 @@ import {
   getHealth,
   resetInbox,
   sendDraft,
+  sendInbound,
+  sendJamesReply,
 } from './api.js';
 
 const POLL_MS = 1500;
@@ -166,6 +168,18 @@ export default function App() {
     [act],
   );
 
+  // Typed as the buyer: same endpoint the simulated DMs use, so the reply,
+  // reclassification and hot-summary logic all run exactly as they would live.
+  const handleSendAsBuyer = useCallback(
+    (conversationId, text) => act(() => sendInbound({ conversationId, text })),
+    [act],
+  );
+
+  const handleSendAsJames = useCallback(
+    (conversationId, text) => act(() => sendJamesReply(conversationId, text)),
+    [act],
+  );
+
   const pendingDrafts = conversations.filter((c) => c.hasPendingDraft).length;
 
   return (
@@ -275,6 +289,8 @@ export default function App() {
               onSendDraft={handleSendDraft}
               onEditDraft={handleEditDraft}
               onPaymentLink={handlePaymentLink}
+              onSendAsBuyer={handleSendAsBuyer}
+              onSendAsJames={handleSendAsJames}
               busy={acting}
             />
           </section>

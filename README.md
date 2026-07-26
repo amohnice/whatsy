@@ -75,6 +75,7 @@ a real alternative, not a hallucinated price.
 | `GET` | `/api/conversations` | list, enriched with preview + draft flag |
 | `GET` | `/api/conversations/:id` | conversation + messages |
 | `POST` | `/api/messages/inbound` | `{conversationId \| buyerHandle, text}` — runs the pipeline |
+| `POST` | `/api/conversations/:id/reply` | James's own reply (`sender: 'james'`) — no Claude call |
 | `PATCH` | `/api/conversations/:id/send-draft` | edit draft text, stays a draft |
 | `POST` | `/api/conversations/:id/send-draft` | approve + send (optional `text` to edit-and-send) |
 | `POST` | `/api/conversations/:id/payment-link` | **mock** link, posted into the thread |

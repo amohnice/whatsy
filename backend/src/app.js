@@ -121,6 +121,30 @@ app.post('/api/messages/inbound', async (req, res, next) => {
   }
 });
 
+// James types a reply himself, bypassing the AI. No Claude call — but the
+// message joins the thread, so later drafts and classifications see it.
+app.post('/api/conversations/:id/reply', async (req, res, next) => {
+  try {
+    const conversation = await store.getConversation(req.params.id);
+    if (!conversation) return res.status(404).json({ error: 'conversation not found' });
+
+    const { text } = req.body ?? {};
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ error: 'text is required' });
+    }
+
+    const message = await store.createMessage({
+      conversationId: conversation.id,
+      sender: 'james',
+      text: text.trim(),
+    });
+    const updated = await store.updateConversation(conversation.id, {});
+    res.status(201).json({ conversation: updated, message });
+  } catch (err) {
+    next(err);
+  }
+});
+
 /** Resolves which draft an action targets: an explicit id, else the newest. */
 async function resolveDraft(conversationId, messageId) {
   if (messageId) {

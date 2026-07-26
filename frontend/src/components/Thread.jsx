@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Badge from './Badge.jsx';
+import Composer from './Composer.jsx';
 
 const time = (iso) =>
   new Date(iso).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
@@ -26,6 +27,8 @@ export default function Thread({
   onSendDraft,
   onEditDraft,
   onPaymentLink,
+  onSendAsBuyer,
+  onSendAsJames,
   busy,
 }) {
   const scrollRef = useRef(null);
@@ -100,6 +103,13 @@ export default function Thread({
           ),
         )}
       </div>
+
+      <Composer
+        conversationId={conversation.id}
+        onSendAsBuyer={onSendAsBuyer}
+        onSendAsJames={onSendAsJames}
+        busy={busy}
+      />
     </>
   );
 }

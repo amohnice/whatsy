@@ -786,3 +786,97 @@ button {
 .warn-bar .btn {
   margin-left: auto;
 }
+
+/* ----------------------------------------------------------------- composer */
+
+.composer {
+  flex: none;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  padding: 10px 20px 12px;
+}
+
+.composer-modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mode {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink-soft);
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mode:hover:not(:disabled) {
+  background: var(--bg);
+}
+
+.mode:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mode.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.mode-hint {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.composer-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.composer-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.composer-input {
+  flex: 1;
+  font: inherit;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  resize: vertical;
+  min-height: 42px;
+  background: var(--panel);
+}
+
+.composer-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.composer-input:disabled {
+  background: var(--bg);
+  color: var(--ink-faint);
+}
+
+.composer-row .btn-primary {
+  padding: 10px 18px;
+}

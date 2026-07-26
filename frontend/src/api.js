@@ -41,6 +41,13 @@ export const sendDraft = (conversationId, { messageId, text } = {}) =>
     body: JSON.stringify({ messageId, text }),
   });
 
+// James's own reply — no AI involved.
+export const sendJamesReply = (conversationId, text) =>
+  request(`/conversations/${conversationId}/reply`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+
 export const createPaymentLink = (conversationId) =>
   request(`/conversations/${conversationId}/payment-link`, { method: 'POST' });
 
